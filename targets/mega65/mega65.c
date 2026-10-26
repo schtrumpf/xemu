@@ -655,9 +655,10 @@ static void update_emulated_time_sources ( void )
 }
 
 
-static void update_emulator ( void )
+// Everything update_emulator() does except closing the frame. The paused (trace) loop uses this directly:
+// it must keep the frame access open, since emulation resumes rendering the same frame after a step.
+static void update_emulator_without_frame_close ( void )
 {
-	vic4_close_frame_access();
 	// XXX: some things has been moved here from the main loop, however update_emulator is called from other places as well, FIXME check if it causes problems or not!
 	inject_ready_check_do();
 	audio65_sid_inc_framecount();
@@ -676,11 +677,16 @@ static void update_emulator ( void )
 		ERROR_WINDOW("SerialTCP failure:\n%s", err);
 	}
 #endif
-	// Screen updating, final phase
-	//vic4_close_frame_access();
 	// Let's sleep ...
 	xemu_timekeeping_delay(videostd_frametime);
 	update_emulated_time_sources();
+}
+
+
+static void update_emulator ( void )
+{
+	vic4_close_frame_access();
+	update_emulator_without_frame_close();
 }
 
 
@@ -723,8 +729,10 @@ static void emulation_loop ( void )
 			// we still need to feed our emulator with update events ... It also slows this pause-busy-loop down to every full frames (~25Hz) <--- XXX totally inaccurate now!
 			// note, that it messes timing up a bit here, as there is update_emulator() calls later in the "normal" code as well
 			// this can be a bug, but real-time emulation is not so much an issue if you eg doing trace of your code ...
-			// XXX it's maybe a problem to call this!!! update_emulator() is called here which closes frame but no no reopen then ... FIXME: handle this somehow!
-			update_emulator();
+			// The frame is NOT closed here: closing it unlocks the SDL texture, and emulation resumes rendering
+			// the same frame after a step, writing through a stale texture pointer (segfault on macOS/Metal).
+			// The window keeps showing the last presented frame while paused.
+			update_emulator_without_frame_close();
 			if (trace_step_trigger) {
 				// if monitor triggers a step, break the pause loop, however we will get back the control on the next
 				// iteration of the infinite "for" loop, as "paused" is not altered
