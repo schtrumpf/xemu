@@ -101,13 +101,15 @@ static void m65mon_set_pc ( const Uint16 addr )
 	cpu65_debug_set_pc(addr);
 }
 
-// Both points are checked between instructions, so either one armed means
-// stepping one instruction at a time; only with neither can a step run a
-// whole scanline. Deciding on one point alone let clearing the other leave
-// the remaining one blind to anything inside a scanline-sized step.
+// Both points are checked between instructions, and a trace step is one
+// instruction, so a point armed or the machine paused means stepping one
+// instruction at a time; only with neither can a step run a whole scanline.
+// Deciding on one point alone let clearing the other leave the remaining one
+// blind inside a scanline-sized step, and clearing a point while paused made
+// the next trace step run a scanline's worth of instructions.
 void m65mon_update_step_size ( void )
 {
-	if (breakpoint_pc < 0 && watchpoint_addr < 0)
+	if (!paused && breakpoint_pc < 0 && watchpoint_addr < 0)
 		cpu_cycles_per_step = cpu_cycles_per_scanline;
 	else
 		cpu_cycles_per_step = 0;
