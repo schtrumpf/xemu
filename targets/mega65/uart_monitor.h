@@ -30,6 +30,8 @@ extern int  uartmon_is_active      ( void );
 extern void uartmon_update         ( void );
 extern void uartmon_close          ( void );
 extern void uartmon_finish_command ( void );
+extern void m65mon_update_step_size ( void );
+extern void m65mon_show_regs       ( void );
 
 #endif
 #endif

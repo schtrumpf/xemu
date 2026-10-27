@@ -749,10 +749,7 @@ static void emulation_loop ( void )
 				} else {
 					DEBUGPRINT("TRACE: leaving trace mode @ $%04X" NL, cpu65.pc);
 #ifdef					HAS_UARTMON_SUPPORT
-					if (breakpoint_pc < 0)
-						cpu_cycles_per_step = cpu_cycles_per_scanline;
-					else
-						cpu_cycles_per_step = 0;
+					m65mon_update_step_size();
 #else
 					cpu_cycles_per_step = cpu_cycles_per_scanline;
 #endif
@@ -772,6 +769,10 @@ static void emulation_loop ( void )
 			if (watchpoint_val != debug_read_linear_byte(watchpoint_addr))
 			{
 				watchpoint_val = debug_read_linear_byte(watchpoint_addr);
+				// Announce the stop like a breakpoint does: a silent pause left
+				// a monitor client no way to know the machine had stopped.
+				DEBUGPRINT("TRACE: Watchpoint @ $%07X changed to $%02X, Xemu moves to trace mode." NL, watchpoint_addr, watchpoint_val);
+				m65mon_show_regs();
 				paused = 1;
 			}
 		}
