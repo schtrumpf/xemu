@@ -101,23 +101,30 @@ static void m65mon_set_pc ( const Uint16 addr )
 	cpu65_debug_set_pc(addr);
 }
 
-static void m65mon_breakpoint ( int brk )
+// Both points are checked between instructions, so either one armed means
+// stepping one instruction at a time; only with neither can a step run a
+// whole scanline. Deciding on one point alone let clearing the other leave
+// the remaining one blind to anything inside a scanline-sized step.
+void m65mon_update_step_size ( void )
 {
-	breakpoint_pc = brk;
-	if (brk < 0)
+	if (breakpoint_pc < 0 && watchpoint_addr < 0)
 		cpu_cycles_per_step = cpu_cycles_per_scanline;
 	else
 		cpu_cycles_per_step = 0;
 }
 
+static void m65mon_breakpoint ( int brk )
+{
+	breakpoint_pc = brk;
+	m65mon_update_step_size();
+}
+
 static void m65mon_watchpoint ( int addr )
 {
 	watchpoint_addr = addr;
-	watchpoint_val = debug_read_linear_byte(addr);
-	if (addr < 0)
-		cpu_cycles_per_step = cpu_cycles_per_scanline;
-	else
-		cpu_cycles_per_step = 0;
+	if (addr >= 0)
+		watchpoint_val = debug_read_linear_byte(addr);
+	m65mon_update_step_size();
 }
 
 static void m65mon_dumpmem28 ( int addr )
@@ -346,6 +353,11 @@ static void execute_command ( char *cmd )
 			}
 			break;
 		case 'b':
+			// 'b' alone clears the breakpoint; there was no other way to remove one.
+			if (check_end_of_command(cmd, false)) {
+				m65mon_breakpoint(-1);
+				break;
+			}
 			cmd = parse_hex_arg(cmd, &par1, 0, 0xFFFF);
 			if (cmd && check_end_of_command(cmd, true))
 				m65mon_breakpoint(par1);
@@ -355,6 +367,11 @@ static void execute_command ( char *cmd )
 			m65mon_set_pc(par1);
 			break;
 		case 'w':
+			// 'w' alone clears the watchpoint.
+			if (check_end_of_command(cmd, false)) {
+				m65mon_watchpoint(-1);
+				break;
+			}
 			cmd = parse_hex_arg(cmd, &par1, 0, 0xFFFFFFF);
 			if (cmd && check_end_of_command(cmd, true))
 				m65mon_watchpoint(par1);
