@@ -689,6 +689,27 @@ static void update_emulator ( void )
 	update_emulator_without_frame_close();
 }
 
+// One iteration of the paused (trace) loop. The full update ends by sleeping
+// until the next frame, so servicing the monitor only through it answered one
+// command per frame (~40 ms measured): a debugger stepping over a subroutine
+// or reading memory waited seconds. While paused the monitor is serviced
+// about every millisecond, and the full update (events, GUI, timekeeping) still
+// runs once per frame time, so the window stays responsive as before.
+static void update_emulator_while_paused ( void )
+{
+	static Uint32 last_full_update = 0;
+	const Uint32 now = SDL_GetTicks();
+	if (now - last_full_update >= (Uint32)(videostd_frametime / 1000)) {
+		update_emulator_without_frame_close();
+		last_full_update = SDL_GetTicks();
+		return;
+	}
+#ifdef HAS_UARTMON_SUPPORT
+	uartmon_update();
+#endif
+	SDL_Delay(1);
+}
+
 
 static void emulation_loop ( void )
 {
@@ -726,13 +747,12 @@ static void emulation_loop ( void )
 				uartmon_finish_command();
 			}
 #endif
-			// we still need to feed our emulator with update events ... It also slows this pause-busy-loop down to every full frames (~25Hz) <--- XXX totally inaccurate now!
-			// note, that it messes timing up a bit here, as there is update_emulator() calls later in the "normal" code as well
-			// this can be a bug, but real-time emulation is not so much an issue if you eg doing trace of your code ...
+			// We still need to feed our emulator with update events; that happens once per frame time,
+			// while the monitor is serviced about every millisecond (see update_emulator_while_paused).
 			// The frame is NOT closed here: closing it unlocks the SDL texture, and emulation resumes rendering
 			// the same frame after a step, writing through a stale texture pointer (segfault on macOS/Metal).
 			// The window keeps showing the last presented frame while paused.
-			update_emulator_without_frame_close();
+			update_emulator_while_paused();
 			if (trace_step_trigger) {
 				// if monitor triggers a step, break the pause loop, however we will get back the control on the next
 				// iteration of the infinite "for" loop, as "paused" is not altered
