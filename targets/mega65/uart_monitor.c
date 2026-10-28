@@ -464,8 +464,25 @@ int uartmon_init ( const char *fn )
 		ERROR_WINDOW("Cannot initialize network, uart_mon won't be availbale\n%s", init_status);
 		return 1;
 	}
-	if (fn[0] == ':') {
-		int port = atoi(fn + 1);
+	// ":port" binds every interface. "A.B.C.D:port" binds that address only,
+	// e.g. "127.0.0.1:4510": on Windows (no socket file) the any-interface
+	// form exposes the monitor to the network and raises a firewall prompt.
+	// A prefix that is not a dotted IPv4 address leaves fn a socket path.
+	const char *tcp = fn[0] == ':' ? fn : NULL;
+	unsigned int bind_ip = 0;
+	const char *colon = strrchr(fn, ':');
+	if (!tcp && colon && colon - fn < 16) {
+		char host[16];
+		memcpy(host, fn, colon - fn);
+		host[colon - fn] = '\0';
+		unsigned int ip = inet_addr(host);
+		if (ip != INADDR_NONE) {
+			bind_ip = ip;
+			tcp = colon;
+		}
+	}
+	if (tcp) {
+		int port = atoi(tcp + 1);
 		if (port < 1024 || port > 65535) {
 			ERROR_WINDOW("uartmon: invalid port specification %d (1024-65535 is allowed) from string %s", port, fn);
 			return 1;
@@ -484,7 +501,7 @@ int uartmon_init ( const char *fn )
 		//sock_st.sin_family = AF_INET;
 		//sock_st.sin_addr.s_addr = htonl(INADDR_ANY);
 		//sock_st.sin_port = htons(port);
-		xemusock_fill_servaddr_for_inet_ip_native(&sock_st, 0, port);
+		xemusock_fill_servaddr_for_inet_ip_netlong(&sock_st, bind_ip, port);
 		if (xemusock_bind(sock, (struct sockaddr*)&sock_st, sock_len, &xerr)) {
 			ERROR_WINDOW("Cannot bind TCP socket %d, UART monitor cannot be used: %s", port, xemusock_strerror(xerr));
 			xemusock_close(sock, NULL);
@@ -492,7 +509,7 @@ int uartmon_init ( const char *fn )
 		}
 	} else {
 #if !defined(XEMU_ARCH_UNIX)
-		ERROR_WINDOW("On non-UNIX systems, you must use TCP/IP sockets, so uartmon parameter must be in form of :n (n=port number to bind to)\nUARTMON is not available because of bad syntax.");
+		ERROR_WINDOW("On non-UNIX systems, you must use TCP/IP sockets, so uartmon parameter must be in form of :n or A.B.C.D:n (n=port number to bind to)\nUARTMON is not available because of bad syntax.");
 		return 1;
 #else
 		// This is UNIX specific code (UNIX named socket) thus it's OK not use Xemu socket API calls here.
