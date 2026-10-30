@@ -286,6 +286,87 @@ static void cmd_fillmem ( char *param, int addr )
 }
 
 
+// Unlike parse_hex_arg(), this parser bounds every digit before shifting:
+// an arbitrarily long wire value must never overflow into an accepted value.
+static void cmd_register ( const char *param )
+{
+	static const struct {
+		const char *name;
+		unsigned int max;
+	} regs[] = {
+		{ "PC", 0xFFFF }, { "A", 0xFF }, { "X", 0xFF }, { "Y", 0xFF },
+		{ "Z", 0xFF }, { "B", 0xFF }, { "SP", 0xFFFF }, { "FL", 0xFF }
+	};
+	if (!paused) {
+		umon_printf(UMON_SYNTAX_ERROR "register writes require trace mode");
+		return;
+	}
+	while (*param == 32)
+		param++;
+	const char *name = param;
+	while (*param && *param != 32)
+		param++;
+	const size_t name_len = param - name;
+	unsigned int reg;
+	for (reg = 0; reg < sizeof regs / sizeof regs[0]; reg++)
+		if (strlen(regs[reg].name) == name_len && !strncmp(name, regs[reg].name, name_len))
+			break;
+	if (reg == sizeof regs / sizeof regs[0]) {
+		umon_printf(UMON_SYNTAX_ERROR "unknown register");
+		return;
+	}
+	while (*param == 32)
+		param++;
+	if (!*param) {
+		umon_printf(UMON_SYNTAX_ERROR "missing register value");
+		return;
+	}
+	unsigned int value = 0;
+	while (*param && *param != 32) {
+		unsigned int digit;
+		if (*param >= '0' && *param <= '9')
+			digit = *param - '0';
+		else if (*param >= 'A' && *param <= 'F')
+			digit = *param - 'A' + 10;
+		else if (*param >= 'a' && *param <= 'f')
+			digit = *param - 'a' + 10;
+		else {
+			umon_printf(UMON_SYNTAX_ERROR "invalid register hex value");
+			return;
+		}
+		if (value > (regs[reg].max - digit) / 16) {
+			umon_printf(UMON_SYNTAX_ERROR "register value outside allowed range");
+			return;
+		}
+		value = value * 16 + digit;
+		param++;
+	}
+	if (!check_end_of_command(param, true))
+		return;
+	// Nothing above this point changes CPU state, including on trailing input.
+	switch (reg) {
+		case 0:
+			cpu65_debug_set_pc_stopped(value);
+			break;
+		case 1: cpu65.a = value; break;
+		case 2: cpu65.x = value; break;
+		case 3: cpu65.y = value; break;
+		case 4: cpu65.z = value; break;
+		case 5: cpu65.bphi = value << 8; break;
+		case 6:
+			cpu65.s = value & 0xFF;
+			cpu65.sphi = value & 0xFF00;
+			break;
+		case 7:
+			// B is not stored. E is real on 45GS02, but set_pf deliberately
+			// leaves it untouched for PLP/RTI; mirror hypervisor restoration.
+			cpu65_set_pf(value & ~CPU65_PF_B);
+			cpu65.pf_e = value & CPU65_PF_E;
+			break;
+	}
+}
+
+
 static void execute_command ( char *cmd )
 {
 	int par1;
@@ -390,7 +471,9 @@ static void execute_command ( char *cmd )
 			reset_mega65(RESET_MEGA65_HARD);
 			break;
 		case '~':
-			if (!strncmp(cmd, "exit", 4)) {
+			if (!strncmp(cmd, "register", 8) && (!cmd[8] || cmd[8] == 32)) {
+				cmd_register(cmd + 8);
+			} else if (!strncmp(cmd, "exit", 4)) {
 				XEMUEXIT(0);
 			} else if (!strncmp(cmd, "reset", 5)) {
 				reset_mega65(RESET_MEGA65_HARD);

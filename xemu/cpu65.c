@@ -401,6 +401,17 @@ void cpu65_reset ( void ) {
 	);
 }
 
+void cpu65_debug_set_pc_stopped ( const Uint16 new_pc ) {
+#ifdef CPU_65CE02
+	CPU65.cpu_inhibit_interrupts = 0;
+#ifdef MEGA65
+	CPU65.prefix = PREFIX_NOTHING;
+#endif
+#endif
+	CPU65.pc = new_pc;
+}
+
+
 void cpu65_debug_set_pc ( const Uint16 new_pc ) {
 #ifdef	CPU_65CE02
 	int max = 100;
@@ -418,12 +429,8 @@ void cpu65_debug_set_pc ( const Uint16 new_pc ) {
 			1
 #endif
 		);
-	CPU65.cpu_inhibit_interrupts = 0;
-#ifdef	MEGA65
-	CPU65.prefix = PREFIX_NOTHING;
 #endif
-#endif
-	CPU65.pc = new_pc;
+	cpu65_debug_set_pc_stopped(new_pc);
 }
 
 

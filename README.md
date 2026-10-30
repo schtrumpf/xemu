@@ -32,6 +32,19 @@ the wiki section of the project, here**:
 
 https://github.com/lgblgblgb/xemu/wiki
 
+## Rebound Retro Lab fork: stopped register editing
+
+This fork's MEGA65 UART monitor accepts `~register NAME HEX` while in trace
+mode (`t1`). Names are `PC`, `A`, `X`, `Y`, `Z`, `B`, `SP`, and `FL`;
+PC/SP are 16-bit and the others are 8-bit. Read back with `r`.
+Values are plain hexadecimal without a prefix. Unknown names, malformed or
+out-of-range values, trailing arguments, and writes while running are refused
+without changing CPU state.
+
+`FL` includes the 45GS02 E flag; B/bit 4 is not stored. Writing PC discards
+pending prefix/MAP interrupt-inhibition state without executing instructions
+or resuming the machine. The upstream `g` command remains unchanged.
+
 ## Emulators within the Xemu project
 
 ### List of emulators which can be useful:

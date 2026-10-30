@@ -116,6 +116,9 @@ extern void  cpu65_illegal_opcode_callback ( void );
 extern void cpu65_reset ( void );
 extern void cpu65_init ( void );	// optional to be called, cpu_reset() calls this as well. See cpu65.c for more info on this.
 extern void cpu65_debug_set_pc ( const Uint16 new_pc );
+// Caller must have stopped execution. Discards pending prefix/MAP sequence
+// state without executing instructions, unlike cpu65_debug_set_pc().
+extern void cpu65_debug_set_pc_stopped ( const Uint16 new_pc );
 extern int  cpu65_step  (
 #ifdef CPU_STEP_MULTI_OPS
 	const int run_for_cycles
